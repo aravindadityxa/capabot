@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapaBot - AI Resume Matcher</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">🤖 CapaBot</h1>
+            <p class="subtitle">AI Resume Matcher & Skill Recommender</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Input Section -->
+            <div class="input-section">
+                <!-- Resume Input -->
+                <div class="input-panel glass">
+                    <h3>📄 Resume</h3>
+                    <div class="input-options">
+                        <button class="tab-btn active" onclick="switchInput('resume', 'text')">Paste Text</button>
+                        <button class="tab-btn" onclick="switchInput('resume', 'file')">Upload File</button>
+                    </div>
+                    
+                    <div id="resume-text-input" class="input-content">
+                        <textarea id="resume-text" placeholder="Paste your resume text here... 
+Example: 
+Python developer with 3 years experience in web development using React and Django. Strong problem-solving skills and team collaboration."></textarea>
+                    </div>
+                    
+                    <div id="resume-file-input" class="input-content hidden">
+                        <div class="file-upload">
+                            <input type="file" id="resume-file" accept=".pdf,.docx,.doc,.txt">
+                            <label for="resume-file" class="file-label">
+                                📎 Choose PDF, DOCX, or TXT
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Job Description Input -->
+                <div class="input-panel glass">
+                    <h3>💼 Job Description</h3>
+                    <div class="input-options">
+                        <button class="tab-btn active" onclick="switchInput('job', 'text')">Paste Text</button>
+                        <button class="tab-btn" onclick="switchInput('job', 'file')">Upload File</button>
+                    </div>
+                    
+                    <div id="job-text-input" class="input-content">
+                        <textarea id="job-text" placeholder="Paste job description here...
+Example:
+Looking for Python Developer with React experience. Machine Learning knowledge preferred. Strong communication skills required."></textarea>
+                    </div>
+                    
+                    <div id="job-file-input" class="input-content hidden">
+                        <div class="file-upload">
+                            <input type="file" id="job-file" accept=".pdf,.docx,.doc,.txt">
+                            <label for="job-file" class="file-label">
+                                📎 Choose PDF, DOCX, or TXT
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analyze Button -->
+            <div class="analyze-section">
+                <button id="analyze-btn" class="analyze-btn" onclick="analyzeMatch()">
+                    🚀 Analyze Match
+                </button>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results-section" class="results-section hidden">
+                <!-- Match Score -->
+                <div class="score-panel glass">
+                    <h3>Match Score</h3>
+                    <div class="score-container">
+                        <canvas id="matchChart" width="200" height="200"></canvas>
+                        <div class="score-text">
+                            <span id="match-score" class="score">0%</span>
+                            <p id="match-feedback" class="feedback">Analyzing your match...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Skills Analysis -->
+                <div class="skills-analysis">
+                    <div class="skills-panel glass">
+                        <h3>✅ Matching Skills</h3>
+                        <div id="matching-skills" class="skills-list">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+
+                    <div class="skills-panel glass">
+                        <h3>⚠️ Missing Hard Skills</h3>
+                        <div id="missing-hard-skills" class="skills-list">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+
+                    <div class="skills-panel glass">
+                        <h3>💡 Missing Soft Skills</h3>
+                        <div id="missing-soft-skills" class="skills-list">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="recommendations-panel glass">
+                    <h3>🎯 Skill Recommendations</h3>
+                    <div id="recommendations-list" class="recommendations-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>Analyzing your resume and job description...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
