@@ -1,0 +1,60 @@
+<div id="chatbot-widget" class="chatbot-widget">
+    <!-- Chatbot Toggle Button -->
+    <button id="chatbot-toggle" class="chatbot-toggle">
+        <span class="chatbot-icon">💬</span>
+        <span class="chatbot-label">AI Assistant</span>
+    </button>
+
+    <!-- Chatbot Container -->
+    <div id="chatbot-container" class="chatbot-container hidden">
+        <!-- Chatbot Header -->
+        <div class="chatbot-header">
+            <div class="chatbot-header-content">
+                <span class="chatbot-header-icon">🤖</span>
+                <h4>CapaBot Assistant</h4>
+            </div>
+            <button id="chatbot-close" class="chatbot-close">&times;</button>
+        </div>
+
+        <!-- Chatbot Messages -->
+        <div id="chatbot-messages" class="chatbot-messages">
+            <div class="chat-message bot-message">
+                <div class="message-content">
+                    Hello! I'm your AI assistant. I can help you with:
+                    <br>• Resume feedback and improvements
+                    <br>• Job description analysis
+                    <br>• Skill gap explanations
+                    <br>• Career advice
+                    <br><br>How can I assist you today?
+                </div>
+                <div class="message-time">Just now</div>
+            </div>
+        </div>
+
+        <!-- Chatbot Input -->
+        <div class="chatbot-input-container">
+            <div class="input-wrapper">
+                <textarea 
+                    id="chatbot-input" 
+                    class="chatbot-input" 
+                    placeholder="Ask about your resume, job match, or skills..."
+                    rows="1"
+                ></textarea>
+                <button id="chatbot-send" class="chatbot-send-btn">
+                    <span class="send-icon">➤</span>
+                </button>
+            </div>
+            <div class="chatbot-suggestions">
+                <button class="suggestion-btn" onclick="quickQuestion('Can you analyze my resume skills?')">
+                    Analyze my resume
+                </button>
+                <button class="suggestion-btn" onclick="quickQuestion('What skills should I improve?')">
+                    Skill improvements
+                </button>
+                <button class="suggestion-btn" onclick="quickQuestion('Explain the match score')">
+                    Match score help
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
