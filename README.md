@@ -30,10 +30,10 @@ pip install -r requirements.txt
 python app.py
 
 ## 👥 Contributors
-- Arijit Karmakar  
 - Aravind Adityaa M
-- Ezhilarasan  
+- Arijit Karmakar  
 - Ashutosh Kumar Singh
+- Ezhilarasan  
 
 ## 📜 License
 This project is licensed under the **MIT License**.
