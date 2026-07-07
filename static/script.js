@@ -6,7 +6,6 @@ function switchInput(type, inputType) {
     const textInput = document.getElementById(`${type}-text-input`);
     const fileInput = document.getElementById(`${type}-file-input`);
     
-    // Get the parent input-panel and find buttons within it
     const inputPanel = textInput.closest('.input-panel');
     const textBtn = inputPanel.querySelector('.tab-btn:nth-child(1)');
     const fileBtn = inputPanel.querySelector('.tab-btn:nth-child(2)');
@@ -23,9 +22,6 @@ function switchInput(type, inputType) {
         fileBtn.classList.add('active');
     }
 }
-
-// Store analysis data globally for chatbot access
-let globalAnalysisData = null;
 
 // Analyze match function
 async function analyzeMatch() {
@@ -46,11 +42,8 @@ async function analyzeMatch() {
     try {
         const formData = new FormData();
         
-        // Add text inputs if they exist
         if (resumeText) formData.append('resume_text', resumeText);
         if (jobText) formData.append('job_text', jobText);
-        
-        // Add file inputs if they exist
         if (resumeFile) formData.append('resume_file', resumeFile);
         if (jobFile) formData.append('job_file', jobFile);
         
@@ -59,7 +52,6 @@ async function analyzeMatch() {
         const response = await fetch('/analyze', {
             method: 'POST',
             body: formData
-            // Don't set Content-Type header for FormData - browser will set it automatically with boundary
         });
         
         if (!response.ok) {
@@ -69,16 +61,7 @@ async function analyzeMatch() {
         const result = await response.json();
         
         if (result.success) {
-            globalAnalysisData = result; // Store globally for chatbot
             displayResults(result);
-            
-            // Trigger analysis complete event for chatbot
-            const event = new CustomEvent('analysisComplete', { 
-                detail: result 
-            });
-            window.dispatchEvent(event);
-            
-            console.log('Analysis complete, data stored for chatbot:', result);
         } else {
             throw new Error(result.error || 'Analysis failed');
         }
@@ -96,29 +79,13 @@ function displayResults(data) {
     const resultsSection = document.getElementById('results-section');
     resultsSection.classList.remove('hidden');
     
-    // Update match score
     updateMatchScore(data.match_score);
-    
-    // Display skills
     displaySkills('matching-skills', data.matching_skills, 'matching');
     displaySkills('missing-hard-skills', data.missing_skills.hard, 'missing-hard');
     displaySkills('missing-soft-skills', data.missing_skills.soft, 'missing-soft');
-    
-    // Display recommendations
     displayRecommendations(data.recommendations);
     
-    // Update chatbot context
-    updateChatbotContext(data);
-    
-    // Scroll to results
     resultsSection.scrollIntoView({ behavior: 'smooth' });
-}
-
-// Update chatbot context with analysis results
-function updateChatbotContext(data) {
-    // This will be used by the chatbot to access analysis data
-    window.chatbotAnalysisData = data;
-    console.log('Chatbot context updated with analysis data');
 }
 
 // Update match score with chart
@@ -324,15 +291,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Test tab switching functionality
     console.log('Testing tab switching...');
     switchInput('resume', 'text');
     switchInput('job', 'text');
 });
-
-// Export functions for chatbot access
-window.getAnalysisData = function() {
-    return globalAnalysisData;
-};
-
-window.updateChatbotContext = updateChatbotContext;
