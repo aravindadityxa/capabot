@@ -1,6 +1,10 @@
 # CapaBot — AI Resume Matcher
 
-CapaBot analyzes a candidate's resume against a job description, produces a match score, identifies skill gaps, and recommends courses to close them. It runs completely offline — no external AI APIs required.
+CapaBot analyzes a candidate's resume against a job description, produces a match score, identifies skill gaps, and recommends courses to close them.
+
+Runs completely **offline** — no external AI APIs, no database server, no configuration required.
+
+---
 
 ## Tech Stack
 
@@ -8,9 +12,11 @@ CapaBot analyzes a candidate's resume against a job description, produces a matc
 |---|---|
 | Backend | FastAPI + Uvicorn |
 | Scoring | TF-IDF + Cosine Similarity (scikit-learn) |
-| Database | MySQL |
+| Database | SQLite (zero config, built into Python) |
 | File Parsing | PyPDF2, python-docx |
 | Frontend | HTML, CSS, JavaScript, Chart.js |
+
+---
 
 ## Features
 
@@ -18,28 +24,47 @@ CapaBot analyzes a candidate's resume against a job description, produces a matc
 - Job description upload or paste text
 - Match score (0–100%) via TF-IDF + cosine similarity
 - Matching skills, missing hard skills, missing soft skills
-- Course recommendations from MySQL
+- Course recommendations pulled from local SQLite database
+- Auto-seeded with 140+ skills and 60+ courses on first run
 - Swagger UI at `/docs`
 - Health check at `/health`
 
-## Prerequisites
+---
 
-- Python 3.11+
-- MySQL 8.x running locally (or remote)
+## Project Structure
 
-## Setup
+```
+capabot-project/
+├── main.py              # FastAPI app (single file)
+├── capabot.db           # SQLite database (auto-created on first run)
+├── requirements.txt     # Python dependencies
+├── .env                 # Environment config (no secrets needed)
+├── static/
+│   ├── script.js        # Frontend logic
+│   └── style.css        # Styles
+└── templates/
+    └── index.html       # Main UI
+```
 
-**1. Clone and enter the project**
+---
+
+## Setup & Run
+
+**1. Clone the repository**
 ```
 git clone https://github.com/aravindadityxa/capabot.git
-cd capabot
+cd capabot-project
 ```
 
 **2. Create and activate a virtual environment**
 ```
 python -m venv venv
-venv\Scripts\activate      # Windows
-source venv/bin/activate   # macOS / Linux
+
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
 ```
 
 **3. Install dependencies**
@@ -47,27 +72,27 @@ source venv/bin/activate   # macOS / Linux
 pip install -r requirements.txt
 ```
 
-**4. Configure environment variables**
-```
-copy .env.example .env     # Windows
-cp .env.example .env       # macOS / Linux
-```
-Edit `.env` and set your MySQL credentials.
-
-**5. Create the database schema**
-```
-mysql -u root -p < database.sql
-```
-
-**6. Run the application**
+**4. Start the application**
 ```
 uvicorn main:app --reload
 ```
 
-Open `http://127.0.0.1:8000` in your browser.  
-Swagger docs are at `http://127.0.0.1:8000/docs`.
+Open **http://127.0.0.1:8000** in your browser.
 
-> Skills and courses are seeded into MySQL automatically on first startup — no manual INSERT needed.
+> On first startup, `capabot.db` is created automatically and seeded with skills and courses. No manual database setup needed.
+
+---
+
+## Deploy to Render
+
+Set the start command to:
+```
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+No environment variables required.
+
+---
 
 ## API Endpoints
 
@@ -78,6 +103,8 @@ Swagger docs are at `http://127.0.0.1:8000/docs`.
 | `GET` | `/skills` | List all skills in the database |
 | `GET` | `/courses` | List all course recommendations |
 | `GET` | `/health` | Health check (app + DB status) |
+
+---
 
 ## License
 

@@ -1,6 +1,6 @@
 """
 CapaBot - AI Resume Matcher
-FastAPI + MySQL backend (single-file application).
+FastAPI + SQLite backend (single-file application).
 
 Start: uvicorn main:app --reload
 Docs:  http://127.0.0.1:8000/docs
@@ -9,18 +9,16 @@ Docs:  http://127.0.0.1:8000/docs
 import os
 import io
 import re
+import sqlite3
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
-import mysql.connector
-from mysql.connector import pooling
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
-from dotenv import load_dotenv
 
 import PyPDF2
 from docx import Document
@@ -30,83 +28,70 @@ from sklearn.metrics.pairwise import cosine_similarity
 # ──────────────────────────────────────────────────────────────────────────────
 # Configuration
 # ──────────────────────────────────────────────────────────────────────────────
-load_dotenv()
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-DB_CONFIG = {
-    "host":     os.getenv("DB_HOST", "localhost"),
-    "port":     int(os.getenv("DB_PORT", 3306)),
-    "user":     os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "database": os.getenv("DB_NAME", "capabot"),
-}
+# Path to the SQLite database file (created automatically if missing)
+DB_PATH = os.path.join(os.path.dirname(__file__), "capabot.db")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# MySQL Connection Pool
+# SQLite Connection Helper
 # ──────────────────────────────────────────────────────────────────────────────
-db_pool: Optional[pooling.MySQLConnectionPool] = None
+
+def get_connection() -> sqlite3.Connection:
+    """
+    Open and return a SQLite connection to capabot.db.
+    - row_factory = sqlite3.Row lets callers access columns by name.
+    - foreign_keys pragma enforces ON DELETE CASCADE.
+    - check_same_thread=False is safe here because each request gets its
+      own connection that is opened and closed within the same call.
+    """
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 
-def ensure_database_exists() -> None:
+def init_database() -> None:
     """
-    Connect to MySQL without a database selected and run
-    CREATE DATABASE IF NOT EXISTS, so the pool never hits
-    'Unknown database' on first startup.
+    Create capabot.db and both tables if they do not exist yet.
+    SQLite creates the file automatically on first connect.
     """
-    bootstrap_cfg = {k: v for k, v in DB_CONFIG.items() if k != "database"}
-    conn = mysql.connector.connect(**bootstrap_cfg)
-    cursor = conn.cursor()
+    conn = get_connection()
     try:
-        db = DB_CONFIG["database"]
-        cursor.execute(
-            f"CREATE DATABASE IF NOT EXISTS `{db}` "
-            "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-        )
-        cursor.execute(f"USE `{db}`")
-        # Create tables if they don't exist yet
-        cursor.execute("""
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS technical_skills (
-                id         INT AUTO_INCREMENT PRIMARY KEY,
-                skill_name VARCHAR(100) NOT NULL UNIQUE,
-                category   VARCHAR(50)  NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                skill_name TEXT NOT NULL UNIQUE,
+                category   TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
             CREATE TABLE IF NOT EXISTS course_recommendations (
-                id               INT AUTO_INCREMENT PRIMARY KEY,
-                skill_name       VARCHAR(100) NOT NULL,
-                course_name      VARCHAR(200) NOT NULL,
-                course_platform  VARCHAR(100) NOT NULL,
-                course_url       VARCHAR(500) NOT NULL,
-                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                skill_name       TEXT NOT NULL,
+                course_name      TEXT NOT NULL,
+                course_platform  TEXT NOT NULL,
+                course_url       TEXT NOT NULL,
+                created_at       TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (skill_name)
                     REFERENCES technical_skills(skill_name)
                     ON UPDATE CASCADE ON DELETE CASCADE
-            )
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_skills_category
+                ON technical_skills(category);
+
+            CREATE INDEX IF NOT EXISTS idx_courses_skill
+                ON course_recommendations(skill_name);
         """)
         conn.commit()
-        logger.info("Database '%s' and tables are ready.", db)
+        logger.info("SQLite database initialised at: %s", DB_PATH)
     finally:
-        cursor.close()
         conn.close()
-
-
-def create_db_pool() -> pooling.MySQLConnectionPool:
-    """Create and return a MySQL connection pool (size 5)."""
-    return pooling.MySQLConnectionPool(pool_name="capabot_pool", pool_size=5, **DB_CONFIG)
-
-
-def get_connection():
-    """Get a connection from the pool."""
-    if db_pool is None:
-        raise RuntimeError("Database pool is not initialised.")
-    return db_pool.get_connection()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -251,20 +236,20 @@ COURSES_SEED = [
 
 def seed_database() -> None:
     """
-    Populate technical_skills and course_recommendations tables on first run.
-    INSERT IGNORE means re-running never causes duplicate-key errors.
+    Populate technical_skills and course_recommendations on first run.
+    INSERT OR IGNORE skips rows whose skill_name already exists,
+    so re-starting the app never causes duplicate errors.
     """
     conn = get_connection()
-    cursor = conn.cursor()
     try:
-        cursor.executemany(
-            "INSERT IGNORE INTO technical_skills (skill_name, category) VALUES (%s, %s)",
+        conn.executemany(
+            "INSERT OR IGNORE INTO technical_skills (skill_name, category) VALUES (?, ?)",
             SKILLS_SEED,
         )
-        cursor.executemany(
-            """INSERT IGNORE INTO course_recommendations
+        conn.executemany(
+            """INSERT OR IGNORE INTO course_recommendations
                (skill_name, course_name, course_platform, course_url)
-               VALUES (%s, %s, %s, %s)""",
+               VALUES (?, ?, ?, ?)""",
             COURSES_SEED,
         )
         conn.commit()
@@ -274,53 +259,48 @@ def seed_database() -> None:
         logger.error("Seed failed: %s", exc)
         raise
     finally:
-        cursor.close()
         conn.close()
 
 
 def load_all_skills() -> list[str]:
     """Return every skill_name from the DB as a lowercase list."""
     conn = get_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT skill_name FROM technical_skills ORDER BY skill_name")
-        return [row[0].lower() for row in cursor.fetchall()]
+        rows = conn.execute(
+            "SELECT skill_name FROM technical_skills ORDER BY skill_name"
+        ).fetchall()
+        return [row["skill_name"].lower() for row in rows]
     finally:
-        cursor.close()
         conn.close()
 
 
 def get_courses_for_skill(skill: str) -> list[dict]:
     """Return up to 2 course rows for the given skill name."""
     conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute(
+        rows = conn.execute(
             """SELECT course_name, course_platform, course_url
                FROM course_recommendations
-               WHERE skill_name = %s
+               WHERE skill_name = ?
                LIMIT 2""",
             (skill.lower(),),
-        )
-        return cursor.fetchall()
+        ).fetchall()
+        # Convert sqlite3.Row objects to plain dicts
+        return [dict(row) for row in rows]
     finally:
-        cursor.close()
         conn.close()
 
 
 def get_skill_category(skill: str) -> str:
     """Return the category of a skill, or 'unknown' if not found."""
     conn = get_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute(
-            "SELECT category FROM technical_skills WHERE skill_name = %s",
+        row = conn.execute(
+            "SELECT category FROM technical_skills WHERE skill_name = ?",
             (skill.lower(),),
-        )
-        row = cursor.fetchone()
-        return row[0] if row else "unknown"
+        ).fetchone()
+        return row["category"] if row else "unknown"
     finally:
-        cursor.close()
         conn.close()
 
 
@@ -449,13 +429,10 @@ def build_recommendations(missing_skills: list[str]) -> list[dict]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db_pool
     logger.info("Starting CapaBot...")
     try:
-        ensure_database_exists()          # CREATE DATABASE + tables if missing
-        db_pool = create_db_pool()        # Now safe to open pool with the DB
-        logger.info("MySQL connection pool created.")
-        seed_database()                   # INSERT IGNORE skills + courses
+        init_database()       # Create capabot.db + tables if missing
+        seed_database()       # INSERT OR IGNORE skills + courses
         logger.info("Application ready.")
     except Exception as exc:
         logger.error("Startup failed: %s", exc)
@@ -473,7 +450,7 @@ app = FastAPI(
     version="2.0",
     description=(
         "AI-powered resume analysis and skill gap detection. "
-        "Uses TF-IDF + Cosine Similarity for scoring and MySQL for skill/course data."
+        "Uses TF-IDF + Cosine Similarity for scoring and SQLite for skill/course data."
     ),
     lifespan=lifespan,
 )
@@ -525,7 +502,7 @@ async def analyze(
         if not resume_content or not job_content:
             raise HTTPException(400, "Both resume and job description must have content.")
 
-        # ── Load skills from MySQL ───────────────────────────────────────────
+        # ── Load skills from SQLite ──────────────────────────────────────────
         all_skills = load_all_skills()
 
         # ── Extract skills mentioned in each text ────────────────────────────
@@ -575,17 +552,15 @@ async def get_all_skills():
 async def get_all_courses():
     """Return all course recommendations stored in the database."""
     try:
-        conn   = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        conn = get_connection()
         try:
-            cursor.execute(
+            rows = conn.execute(
                 "SELECT skill_name, course_name, course_platform, course_url "
                 "FROM course_recommendations ORDER BY skill_name"
-            )
-            courses = cursor.fetchall()
+            ).fetchall()
+            courses = [dict(row) for row in rows]
             return JSONResponse({"success": True, "count": len(courses), "courses": courses})
         finally:
-            cursor.close()
             conn.close()
     except Exception as exc:
         logger.exception("Error fetching courses")
@@ -596,17 +571,14 @@ async def get_all_courses():
 async def health_check():
     """Health check — verifies the app and database are reachable."""
     try:
-        conn   = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        cursor.fetchone()
-        cursor.close()
+        conn = get_connection()
+        conn.execute("SELECT 1").fetchone()
         conn.close()
         return JSONResponse({
             "status":   "healthy",
             "service":  "CapaBot Resume Matcher",
             "version":  "2.0",
-            "database": "connected",
+            "database": "SQLite (connected)",
         })
     except Exception as exc:
         logger.error("Health check failed: %s", exc)
