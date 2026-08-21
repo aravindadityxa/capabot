@@ -79,7 +79,8 @@ def init_database() -> None:
                 created_at       TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (skill_name)
                     REFERENCES technical_skills(skill_name)
-                    ON UPDATE CASCADE ON DELETE CASCADE
+                    ON UPDATE CASCADE ON DELETE CASCADE,
+                UNIQUE(skill_name, course_name, course_platform, course_url)
             );
 
             CREATE INDEX IF NOT EXISTS idx_skills_category
@@ -384,10 +385,16 @@ def compute_match_score(resume_text: str, job_text: str) -> int:
     """
     if not resume_text.strip() or not job_text.strip():
         return 0
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
-    tfidf_matrix = vectorizer.fit_transform([resume_text, job_text])
-    score = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-    return round(float(score) * 100)
+    
+    try:
+        vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+        tfidf_matrix = vectorizer.fit_transform([resume_text, job_text])
+        score = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
+        return round(float(score) * 100)
+    except ValueError:
+        # Handles "empty vocabulary" error when all words are stopwords
+        logger.warning("TF-IDF vocabulary empty (all stopwords or no valid text)")
+        return 0
 
 
 # ──────────────────────────────────────────────────────────────────────────────
